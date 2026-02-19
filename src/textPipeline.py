@@ -111,7 +111,7 @@ def token_person_ent(tok: Token):
             return ent
     return None
 
-def check_depend(doc: Doc, start: int, end: int, cluster_id, max_layers: int = 3):
+def check_depend(doc: Doc, start: int, end: int, max_layers: int = 3):
     """
     Start from a char span (start_char:end_char). Take its root token and climb head->head...
     until you hit a PERSON entity, or run out of layers.
@@ -129,7 +129,7 @@ def check_depend(doc: Doc, start: int, end: int, cluster_id, max_layers: int = 3
     while layers < max_layers:
         ent = token_person_ent(tok)
         if ent is not None:
-            cluster_container[cluster_id]["link"] = (doc_id, (ent.start_char, ent.end_char))
+            return ent
 
         if tok.head is None or tok.head == tok:  # reached sentence root
             return None
@@ -191,20 +191,34 @@ def book_process(text):
                     # we only record link if primary is out of buffer zone to avoid checking primary in 2 different doc but actually same word, we can just link that using overlapping cluster
                     cur_sent = get_local_sent_idx(start, context["local_sent_spans"])
                     if 1 < cur_sent < 19:
-                        check_depend(doc, start, end, doc_id)
+                        buffer_ent = check_depend(doc, start, end)
+                    else:
+                        buffer_ent = None
                         
-            #all we care is: for doc of id x, what clusters it has, and what is the primary of that cluster (tuple position)
-            cluster_container.append({
-                "doc_id": doc_id,
-                "cluster_id": cluster_id,
-                "primary": primary
-            })
+                #all we care is: for doc of id x, what clusters it has, and what is the primary of that cluster (tuple position)
+                if buffer_ent != None:
+                    cluster_container.append({
+                    "doc_id": doc_id,
+                    "cluster_id": cluster_id,
+                    "primary": primary,
+                    "parent": (buffer_ent.start_char, buffer_ent.end_char)
+                })    
+                else:    
+                    cluster_container.append({
+                        "doc_id": doc_id,
+                        "cluster_id": cluster_id,
+                        "primary": primary
+                    })
 
         # Clear RAM
-        doc._.trf_data = None
+        try:
+            doc._.trf_data = None
+        except Exception:
+            pass
+    return doc_container
 
 
-#TODO: CHECK CODE
+#TODO: CHECK CODE, need to fix this into method fittable to run with current pipeline
 
 # 1. To track counts: { "Entity Name": total_mentions }
 entity_popularity = Counter()
