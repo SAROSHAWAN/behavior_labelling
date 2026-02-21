@@ -4,6 +4,9 @@ from typing import Iterator, Tuple, Literal
 from spacy.tokens import Doc, Span, Token
 import difflib
 import spacy
+from dotenv import load_dotenv
+
+load_dotenv()
 spacy.prefer_gpu()
 from fastcoref import spacy_component
 nlp = spacy.load("en_core_web_trf")
