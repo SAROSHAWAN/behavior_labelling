@@ -53,11 +53,11 @@ def sliding_window(sent_nlp, text, window_size=20, step=17):
         j = min(i + window_size, len(sSpans))
         if i >= j:
             break
-        chunk_start = sSpans[i][0] #start of 1st sent
+        chunk_start = sSpans[i][0] #start of 1st sent, treat like global offset
         chunk_end   = sSpans[j-1][1] #end of 20th sent
-        chunk_text  = text[chunk_start:chunk_end]
+        chunk_text  = text[chunk_start:chunk_end] #chunk string
 
-        local_spans = [(s - chunk_start, e - chunk_start) for (s, e) in sSpans[i:j]]
+        local_spans = [(s - chunk_start, e - chunk_start) for (s, e) in sSpans[i:j]] #list that have the span of each sentence in the chunk, but referencing the chunk itself
 
         # Metadata
         context = {
@@ -104,7 +104,7 @@ book_container = [] #propose for book id
 cluster_container = []
 registry = defaultdict(lambda: {"references": []})
 
-def token_person_ent(tok: Token):
+def token_person_ent(tok: Token): #helper for parent finding
     #Return the PERSON entity span containing tok, else None.
     if tok.ent_type_ != "PERSON":
         return None
@@ -114,7 +114,7 @@ def token_person_ent(tok: Token):
             return ent
     return None
 
-def check_depend(doc: Doc, start: int, end: int, max_layers: int = 3):
+def check_depend(doc: Doc, start: int, end: int, max_layers: int = 3): #parents finding
     """
     Start from a char span (start_char:end_char). Take its root token and climb head->head...
     until you hit a PERSON entity, or run out of layers.
@@ -141,6 +141,8 @@ def check_depend(doc: Doc, start: int, end: int, max_layers: int = 3):
         layers += 1
     return None
 
+#containers: doc_container is a list of tuple (doc, metadata)
+#global_ent: list of all 
 def book_process(text):
     doc_container = []
 
@@ -173,6 +175,7 @@ def book_process(text):
         #coref
         #redo: now for each cluster, decide the primary person, and store in temp container
         if doc._.coref_clusters:
+            #cluster = {(0,1), (4,7), etc)}
             for cluster_id, cluster in enumerate(doc._.coref_clusters):
                 # SAFETY CHECK 1: Ensure the cluster list itself isn't None
                 if cluster is None:
@@ -193,11 +196,11 @@ def book_process(text):
                         primary = (start, end)
                     # we only record link if primary is out of buffer zone to avoid checking primary in 2 different doc but actually same word, we can just link that using overlapping cluster
                     #fix, streamline child_cluster linking directly into global_ent for easier access
-                    cur_sent = get_local_sent_idx(start, context["local_sent_spans"])
-                    if 1 < cur_sent < 19:
-                        buffer_ent = check_depend(doc, start, end)
-                    else:
-                        buffer_ent = None
+                cur_sent = get_local_sent_idx(primary[0], context["local_sent_spans"])
+                if 1 < cur_sent < 19:
+                    buffer_ent = check_depend(doc, primary[0], end)
+                else:
+                    buffer_ent = None
                         
                 #all we care is: for doc of id x, what clusters it has, and what is the primary of that cluster (tuple position)
                 if buffer_ent != None:
@@ -226,7 +229,7 @@ def book_process(text):
 #   i.run a simple 
 # 2.for each of the unique person we get: 
 #   i.use fuzzy to check global_ent against each unique person |||| example logic: for i, ent in enumerated(global_ent): if fuzzyFunct(ent.get("text")) == true: add index to that unique name bucket under list "ent"
-#   ii.for the ent above, check if we have "child_cluster" in ent, if they do, use the same above logic but with cluster_id to get the index from cluster_container, and add that index to this unique name bucket in list "cluster"
+#   ii.for the ent above, check if we have "child_cluster" in ent, if they do, use the same above logic but with [cluster_id and ent's doc_id] to get the index from cluster_container, and add that index to this unique name bucket in list "cluster"
 # 3.once we get registry done, we will proceed to work with dups:
 #   i.for each unique person bucket, make 2 sets: ent_index and cluster_index
 #   ii.for each of the 2 set:
