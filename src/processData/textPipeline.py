@@ -75,22 +75,25 @@ def sliding_window(sent_nlp, text, window_size=7, step=5):
         chunk_start = sSpans[i][0] #start of 1st sent, treat like global offset
         chunk_end   = sSpans[j-1][1] #end of 20th sent
         chunk_text  = text[chunk_start:chunk_end] #chunk string
+        
 
         local_spans = [(s - chunk_start, e - chunk_start) for (s, e) in sSpans[i:j]] #list that have the span of each sentence in the chunk, but referencing the chunk itself
 
         # Metadata
+        is_last = (j == len(sSpans))
+
         context = {
             "offset": chunk_start, 
             "sent_range": {"start_sent": i, "end_sent": j},
-            "local_sent_spans": local_spans    
+            "local_sent_spans": local_spans,
+            "is_last": is_last    #add bool to check if last chunk
         }
 
-        yield (chunk_text, context)
-
 def get_local_sent_idx(pos: int, local_sent_spans: list[tuple]):
+    last_idx = len(local_sent_spans) - 1
     for idx, (s, e) in enumerate(local_sent_spans):
         if s <= pos < e:
-            return idx
+            return -1 if idx == last_idx else idx
     return None  # not found
 
 def score_mention(span):
@@ -178,9 +181,11 @@ def book_process(text):
         chunk_start_offset = context["offset"]
 
         #we start working on the doc imediately to take avantage of its currently being load on living memory so we can take adv of doc_id
+        is_last = context.get("is_last", False)
+        is_first = (doc_id == 0)
         for ent in doc.ents:
             cur_sent = get_local_sent_idx(ent.start_char, context["local_sent_spans"])
-            sent_valid = (cur_sent is not None) and (0 < cur_sent < 7)
+            sent_valid = (cur_sent is not None) and ((is_first and (0 <= cur_sent < 7)) or (is_last and (cur_sent > 0 or cur_sent == -1)) or (not is_first and not is_last and (0 < cur_sent < 7)))
             if ent.label_ == "PERSON" and sent_valid:
                 global_ent.append({
                     "type": "PERSON",
@@ -218,7 +223,7 @@ def book_process(text):
                     # we only record link if primary is out of buffer zone to avoid checking primary in 2 different doc but actually same word, we can just link that using overlapping cluster
                     #fix, streamline child_cluster linking directly into global_ent for easier access
                 cur_sent = get_local_sent_idx(primary[0], context["local_sent_spans"])
-                sent_valid = (cur_sent is not None) and (0 < cur_sent < 7)
+                sent_valid = (cur_sent is not None) and ((is_first and (0 <= cur_sent < 7)) or (is_last and (cur_sent > 1 or cur_sent == -1)) or (not is_first and not is_last and (1 < cur_sent < 7)))
                 if sent_valid:
                     buffer_ent = check_depend(doc, primary[0], end)
                 else:
@@ -258,6 +263,39 @@ def book_process(text):
 #       I.compare the set between 2 unique person using intersection of sets
 #       II.for simplicity, if intersect in ent_index at all, we will merge those 2 unique person bucket to create a new entry in the registry
 #       III.meanwhile, if cluster set intersect pass a certain percentage, say 40-50? we also merge the 2 unique person bucket in the registry
+
+
+what i want register to looks like:
+registry = {
+    "Adder": {
+        "references": [
+            {
+                "global_start": 10452,  # Original offset in the .txt
+                "text": "he",            # Pronoun reference
+                "doc_id": 17,           # Integer index for memory safety
+                "local_line": 5,        # Sentence index in this chunk
+                "local_span": [15, 17], # Position in the current doc
+                "type": "COREF"         # Categorized as coreference/pronoun
+            },
+            {
+                "global_start": 10440,  
+                "text": "Adder",
+                "doc_id": 17,
+                "local_line": 4,
+                "local_span": [3, 8],
+                "type": "PERSON"        # Primary NER extraction
+            },
+            {
+                "global_start": 10510,  # A new alias mention further in the text
+                "text": "Mr. Black",    # The specific alias you requested
+                "doc_id": 17,
+                "local_line": 8,
+                "local_span": [22, 31],
+                "type": "PERSON"        # Treat aliases as PERSON for NER logic
+            }
+        ]
+    }
+}
 
 # 1. To track counts: { "Entity Name": total_mentions }
 entity_popularity = Counter()
