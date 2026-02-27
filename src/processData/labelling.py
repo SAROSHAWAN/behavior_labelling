@@ -95,7 +95,7 @@ def bart_prep_generator(doc_container, registry, target_name):
 
         # 2. INNER LOOP: Chronological s_idx through the doc sentences
         for s_idx, sent in enumerate(doc.sents):
-            # Deduplication Check
+            # Deduplication and edge case Check
             if is_first:
                 sent_valid = (0 <= s_idx < LAST_INDEX)
             elif is_last:
@@ -114,14 +114,17 @@ def bart_prep_generator(doc_container, registry, target_name):
             elif s_idx == f_idx:
                 # MILESTONE REACHED: Push f_idx
                 sentence_queue.append(f_text)
-                
+                next_idx = s_idx + 1
                 # RE-ENGAGE: Immediately get new f_idx for the next milestone
-                f_idx, f_text = get_next_f()
+                
                 
                 # 4. THE "LAST CHECK": Push one more to complete the context
                 # We peek at s_idx + 1 to provide the 'Post' context
-                if f_idx < WINDOW_SIZE:
-                    next_idx = s_idx + 1
+                # edge case (last chunk), for all other cases we know because of dedup above we can do future peak, but not for last chunk where we let it iter to len-1
+                # we know that a chunk must always <WINDOW_SIZE, therefor we can easily know if we are at the very last line
+                if next_idx < WINDOW_SIZE: 
+                    f_idx, f_text = get_next_f()
+                    
                     # If the very next line is also a milestone, push its fixed version
                     if next_idx == f_idx:
                         sentence_queue.append(f_text)
