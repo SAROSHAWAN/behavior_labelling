@@ -1,6 +1,6 @@
 from spacy import tokens
 from collections import deque
-
+from src.config import WINDOW_SIZE, STEP, LAST_INDEX
 
 def clean_persp(target_name, current_doc_id, doc_container, registry):
     cleaned_sentences = []
@@ -20,11 +20,11 @@ def clean_persp(target_name, current_doc_id, doc_container, registry):
     
     for sent_idx, sent in enumerate(doc.sents):
         if is_first:
-            sent_valid = (0 <= sent_idx < 7)
+            sent_valid = (0 <= sent_idx < LAST_INDEX)
         elif is_last:
             sent_valid = (sent_idx > 0) # or sent_idx == -1 if using relative indexing
         else:
-            sent_valid = (0 < sent_idx < 7)
+            sent_valid = (0 < sent_idx < LAST_INDEX)
 
         # Only perform the surgery if the sentence belongs to this chunk's "unique core"
         if not sent_valid:
@@ -142,11 +142,11 @@ def bart_prep_generator(doc_container, registry, target_name):
         for s_idx, sent in enumerate(doc.sents):
             # Deduplication Check
             if is_first:
-                sent_valid = (0 <= s_idx < 7)
+                sent_valid = (0 <= s_idx < LAST_INDEX)
             elif is_last:
                 sent_valid = (s_idx > 0)
             else:
-                sent_valid = (0 < s_idx < 7)
+                sent_valid = (0 < s_idx < LAST_INDEX)
 
             if not sent_valid:
                 continue

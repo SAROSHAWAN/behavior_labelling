@@ -31,7 +31,7 @@ from fastcoref import spacy_component
 nlp = spacy.load("en_core_web_trf")
 nlp.add_pipe("fastcoref", config={'model_architecture': 'LingMessCoref', 'device': 'cuda'})
 
-
+from src.config import WINDOW_SIZE, STEP, LAST_INDEX
 
 def make_sentencizer():
     sent_nlp = spacy.blank("en")
@@ -64,12 +64,12 @@ def iter_books(mode: Mode, base_dir: str | Path = "data/book", pattern: str = "*
         book_id = fp.name.split(".")[0]
         yield book_id, text
 
-def sliding_window(sent_nlp, text, window_size=7, step=5):
+def sliding_window(sent_nlp, text, WINDOW_SIZE, STEP):
     
     sSpans = sentenizer(text, sent_nlp)
 
-    for i in range(0, len(sSpans), step):
-        j = min(i + window_size, len(sSpans))
+    for i in range(0, len(sSpans), STEP):
+        j = min(i + WINDOW_SIZE, len(sSpans))
         if i >= j:
             break
         chunk_start = sSpans[i][0] #start of 1st sent, treat like global offset
@@ -187,7 +187,7 @@ def book_process(text):
         is_first = (doc_id == 0)
         for ent in doc.ents:
             cur_sent = get_local_sent_idx(ent.start_char, context["local_sent_spans"])
-            sent_valid = (cur_sent is not None) and ((is_first and (0 <= cur_sent < 7)) or (is_last and (cur_sent > 0 or cur_sent == -1)) or (not is_first and not is_last and (0 < cur_sent < 7)))
+            sent_valid = (cur_sent is not None) and ((is_first and (0 <= cur_sent < LAST_INDEX)) or (is_last and (cur_sent > 0 or cur_sent == -1)) or (not is_first and not is_last and (0 < cur_sent < LAST_INDEX)))
             if ent.label_ == "PERSON" and sent_valid:
                 global_ent.append({
                     "type": "PERSON",
@@ -225,7 +225,7 @@ def book_process(text):
                     # we only record link if primary is out of buffer zone to avoid checking primary in 2 different doc but actually same word, we can just link that using overlapping cluster
                     #fix, streamline child_cluster linking directly into global_ent for easier access
                 cur_sent = get_local_sent_idx(primary[0], context["local_sent_spans"])
-                sent_valid = (cur_sent is not None) and ((is_first and (0 <= cur_sent < 7)) or (is_last and (cur_sent > 1 or cur_sent == -1)) or (not is_first and not is_last and (1 < cur_sent < 7)))
+                sent_valid = (cur_sent is not None) and ((is_first and (0 <= cur_sent < LAST_INDEX)) or (is_last and (cur_sent > 1 or cur_sent == -1)) or (not is_first and not is_last and (1 < cur_sent < LAST_INDEX)))
                 if sent_valid:
                     buffer_ent = check_depend(doc, primary[0], end)
                 else:
