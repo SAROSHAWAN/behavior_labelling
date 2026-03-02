@@ -414,7 +414,7 @@ def process_registry(global_ent, cluster_container):
             references.append({
                 "global_char_pos": ent["global_start"],
                 "text": ent["text"],
-                "doc_ptr": ent['doc_id'],
+                "doc_id": ent['doc_id'],
                 "local_line": ent.get("sentence_id", -1),
                 "local_span": list(ent["doc_token_pos"]),
                 "type": "PERSON"  # <-- Added back!
@@ -428,7 +428,7 @@ def process_registry(global_ent, cluster_container):
                 references.append({
                     "global_char_pos": mention["global_char_pos"],
                     "text": mention["text"],
-                    "doc_ptr": ent['doc_id'],
+                    "doc_id": ent['doc_id'],
                     "local_line": mention["local_line"],
                     "local_span": mention["local_span"],
                     "type": "COREF"  # <-- Added back!

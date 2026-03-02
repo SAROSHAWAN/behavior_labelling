@@ -5,6 +5,7 @@ from processData.sceneGenerator import scene_batch_generator
 from src.fileIO import load_doc_container, load_registry
 from config import BATCH_SIZE, LABELS
 
+#TODO: ADD SKWEAK LEXICON
 # Initialize the 'Teacher' model
 # bart-large-mnli is heavy; batching is essential to stay efficient
 classifier = pipeline("zero-shot-classification", 
@@ -39,3 +40,4 @@ def process_teacher_batch(character_name, scene_batch):
         })
         
     return processed_data
+#return: update a container of labels from bart! items: character_name (also relative by book), list of tuple: (sent_id, labels vector)
