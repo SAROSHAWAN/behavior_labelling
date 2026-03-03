@@ -1,11 +1,21 @@
+import json
+from pathlib import Path
+from collections import defaultdict
 import torch
 from transformers import pipeline
 from processData.textPipeline import  doc_container, registry #remove these pref after teast once we wanna use storage
 from processData.sceneGenerator import scene_batch_generator
 from src.fileIO import load_doc_container, load_registry
+from config import WINDOW_SIZE
+import skweak
+
+# --- PATH SETUP ---
+# Locating the baked lexicon in the root 'data' folder
+script_dir = Path(__file__).resolve().parent
+root_dir = script_dir.parent.parent
+
 from config import BATCH_SIZE, LABELS
 
-#TODO: ADD SKWEAK LEXICON
 # Initialize the 'Teacher' model
 # bart-large-mnli is heavy; batching is essential to stay efficient
 classifier = pipeline("zero-shot-classification", 
@@ -35,7 +45,7 @@ def process_teacher_batch(character_name, scene_batch):
         l_vector = res['scores'] 
         
         processed_data.append({
-            "sent_idx": indices[i],
+            "context": indices[i],
             "label_vector": l_vector
         })
         
