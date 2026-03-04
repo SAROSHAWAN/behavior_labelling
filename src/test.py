@@ -1,3 +1,4 @@
+import random
 import sys
 import os
 # This tells Python to include your main PorjectBart folder in its search path
@@ -74,8 +75,9 @@ def test_pipeline_with_real_data():
         print(f"Test Passed: Built registry with {len(registry)} unique person(s).")
 
         # --- Print out the first registry entry to the terminal ---
-        print(f"\n--- Sample Registry Structure for '{first_person}' ---")
-        print(json.dumps({first_person: registry[first_person]}, indent=4))
+        result = f"total of {len(registry[first_person]["references"])} occurances of {first_person}"
+
+        print(result)
 
 if __name__ == "__main__":
     # Allows manual execution: python src/test.py

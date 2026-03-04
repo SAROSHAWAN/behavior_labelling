@@ -56,6 +56,7 @@ multiprocess==0.70.18
 murmurhash==1.0.15
 nest-asyncio==1.6.0
 networkx==3.6.1
+nltk==3.9.3
 numpy==1.26.4
 packaging==26.0
 pandas==3.0.1
@@ -83,7 +84,8 @@ rich==14.3.2
 safetensors==0.7.0
 scikit-learn==1.8.0
 scipy==1.17.0
-sentence-transformers==5.2.3
+sentence-transformers==2.2.2
+sentencepiece==0.2.1
 setuptools==70.2.0
 shellingham==1.5.4
 six==1.17.0
