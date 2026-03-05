@@ -1,13 +1,10 @@
 import random
 import sys
 import os
-# This tells Python to include your main PorjectBart folder in its search path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
 import pytest
-import json
 from processData.textPipeline import iter_books, book_process, global_ent, cluster_container, process_registry
+from NNrun import run_behavioral_pipeline
+from neuralNet.zeroshot import calculate_w_vector
 
 def test_pipeline_with_real_data():
     """
@@ -61,7 +58,7 @@ def test_pipeline_with_real_data():
         assert len(registry) > 0, "Registry failed to build unique person buckets"
         
         # Check schema of the first unique person bucket
-        first_person = list(registry.keys())[0]
+        first_person = list(registry.keys())[1]
         assert "references" in registry[first_person], "Registry entry missing 'references' list"
         
         # Check schema of a reference item
@@ -79,6 +76,52 @@ def test_pipeline_with_real_data():
 
         print(result)
 
+# --- NEW IMPORTS ---
+def test_zeroshot_behavioral_pipeline():
+    """
+    Test the full integration from text processing to behavioral vector generation.
+    """
+    # 1. Setup Data (Clear previous state)
+    global_ent.clear()
+    cluster_container.clear()
+    
+    books = list(iter_books(mode="test"))
+    book_id, text = books[0]
+    
+    # Process a limited amount of text for a faster test
+    doc_container = book_process(text[:10000]) 
+    registry = process_registry(global_ent, cluster_container)
+
+    # 2. Run Behavioral Pipeline
+    # This invokes NNrun -> sceneGenerator -> zeroshot
+    all_results = run_behavioral_pipeline(doc_container, registry)
+    
+    # 3. Assertions
+    assert isinstance(all_results, dict), "Results should be a dictionary keyed by character name"
+    
+    if len(registry) > 0:
+        first_char = list(registry.keys())[0]
+        assert first_char in all_results, f"No results found for {first_char}"
+        
+        if len(all_results[first_char]) > 0:
+            sample = all_results[first_char][0]
+            assert "label_vector" in sample, "Missing label_vector in output"
+            assert "weighted_vector" in sample, "Missing weighted_vector in output"
+            assert len(sample["label_vector"]) == 6, "Vector length must match 6D labels"
+
+def test_vector_math_logic():
+    """Verify the competitive softmax logic for Group A and B."""
+    # Group A strong, Group B weak
+    input_v = [0.9, 0.8, 0.7, 0.1, 0.1, 0.1]
+    weighted = calculate_w_vector(input_v)
+    
+    # Group A should remain dominant
+    assert sum(weighted[:3]) > sum(weighted[3:])
+    assert len(weighted) == 6
+
 if __name__ == "__main__":
-    # Allows manual execution: python src/test.py
+    # Run the standard pipeline test first
     test_pipeline_with_real_data()
+    # Run the new zeroshot integration tests
+    test_zeroshot_behavioral_pipeline()
+    test_vector_math_logic()

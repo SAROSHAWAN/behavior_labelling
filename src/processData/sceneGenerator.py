@@ -1,7 +1,7 @@
 from spacy import tokens
 from collections import deque
-from src.config import WINDOW_SIZE, STEP, LAST_INDEX, BATCH_SIZE
-from processData.textPipeline import doc_container, registry
+from config import WINDOW_SIZE, STEP, LAST_INDEX, BATCH_SIZE
+
 
 def clean_persp(target_name, current_doc_id, doc_container, registry):
     doc, context = doc_container[current_doc_id]
@@ -36,7 +36,7 @@ def clean_persp(target_name, current_doc_id, doc_container, registry):
             # We look for the start of dependent or coordinate clauses
             if token.dep_ in ["advcl", "xcomp", "conj"]:
                 # Check 3-breath ancestors to see if it belongs to Target
-                if any(a.i in [r["global_start"] for r in doc_refs] for a in list(token.ancestors)[:3]):
+                if any(a.i in [r["global_char_pos"] for r in doc_refs] for a in list(token.ancestors)[:3]):
                     clause_injections.append({
                         "start": token.idx, # token.idx is spacy's method to get char pos for token
                         "label": f"[{target_name}'s clause] "
@@ -100,7 +100,7 @@ def scene_prep_generator(doc_container, registry, target_name):
             if is_first:
                 sent_valid = (0 <= s_idx < LAST_INDEX)
             elif is_last:
-                sent_valid = (s_idx > 0)
+                sent_valid = (0 < s_idx < len(all_raw_sents))
             else:
                 sent_valid = (0 < s_idx < LAST_INDEX)
 
@@ -123,7 +123,7 @@ def scene_prep_generator(doc_container, registry, target_name):
                 # We peek at s_idx + 1 to provide the 'Post' context
                 # edge case (last chunk), for all other cases we know because of dedup above we can do future peak, but not for last chunk where we let it iter to len-1
                 # we know that a chunk must always <WINDOW_SIZE, therefor we can easily know if we are at the very last line
-                if next_idx < WINDOW_SIZE: 
+                if next_idx < len(all_raw_sents): 
                     f_idx, f_text = get_next_f()
                     
                     # If the very next line is also a milestone, push its fixed version
@@ -134,9 +134,10 @@ def scene_prep_generator(doc_container, registry, target_name):
                     else:
                             # Otherwise, push the raw s_idx+1 neighbor
                         sentence_queue.append(all_raw_sents[next_idx].text)
-
                 final_chunk = " ".join(list(sentence_queue)).strip()
                 yield f"{prompt_prefix}{final_chunk}", (doc_id, s_idx) #change to simplify helper funct to get token span
+
+#TODO: change batch to update (add into a global container) instead of dump a list from batch               
 def scene_batch_gen(doc_container, registry, M=BATCH_SIZE):
     # Initialize character-specific queues
     queues = {name: [] for name in registry.keys()}
@@ -149,8 +150,8 @@ def scene_batch_gen(doc_container, registry, M=BATCH_SIZE):
         for name in list(active_generators.keys()):
             try:
                 # 1. Busy Work: Pull the next scene for this character lens
-                text, sent_idx = next(active_generators[name])
-                queues[name].append((sent_idx, text))
+                text, context = next(active_generators[name])
+                queues[name].append((text, context))
                 
                 # 2. Threshold Check: If queue is size M, yield the batch
                 if len(queues[name]) == M:

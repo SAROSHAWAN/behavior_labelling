@@ -5,11 +5,10 @@ from pathlib import Path
 from collections import defaultdict
 import torch
 from transformers import pipeline
-from processData.textPipeline import  doc_container, registry #remove these pref after teast once we wanna use storage
-from processData.sceneGenerator import scene_batch_generator
-from src.fileIO import load_doc_container, load_registry
+
+from processData.sceneGenerator import scene_batch_gen
+#from src.fileIO import load_doc_container, load_registry
 from config import WINDOW_SIZE
-import skweak
 
 # --- PATH SETUP ---
 # Locating the baked lexicon in the root 'data' folder

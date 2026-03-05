@@ -15,8 +15,8 @@ def process_observation_batch(character_name, scene_batch):
     the 768d observation vectors (obs_t).
     """
     # Extract text and indices
-    texts = [item[0] for item in scene_batch]
-    indices = [item[1] for item in scene_batch]
+    texts = [item[0] for item in scene_batch] #text of the scene
+    indices = [item[1] for item in scene_batch] #(doc_id, local_s_idx)
     
     # 2. Batch Encoding
     # convert_to_tensor=True gives you the 16x768 matrix immediately.

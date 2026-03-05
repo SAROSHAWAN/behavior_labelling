@@ -32,7 +32,7 @@ nlp = spacy.load("en_core_web_trf")
 nlp.add_pipe("fastcoref", config={'model_architecture': 'LingMessCoref', 'device': 'cuda'})
 
 
-from src.config import WINDOW_SIZE, STEP, LAST_INDEX
+from config import WINDOW_SIZE, STEP, LAST_INDEX
 
 def make_sentencizer():
     sent_nlp = spacy.blank("en")
@@ -286,7 +286,7 @@ def book_process(text):
 #       III.meanwhile, if cluster set intersect pass a certain percentage, say 40-50? we also merge the 2 unique person bucket in the registry
 
 
-what i want register to looks like:
+what i want register to looks like: one error, we named global_start as global_char_pos in final registry
 registry = {
     "Adder": {
         "references": [
@@ -426,7 +426,7 @@ def process_registry(global_ent, cluster_container):
             # Unpack the pronouns we saved in book_process
             for mention in clust.get("mentions", []):
                 references.append({
-                    "global_char_pos": mention["global_char_pos"],
+                    "global_char_pos": mention["global_char_pos"], #bug
                     "text": mention["text"],
                     "doc_id": ent['doc_id'],
                     "local_line": mention["local_line"],
