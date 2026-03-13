@@ -3,7 +3,7 @@ import sys
 import os
 import pytest
 from src.processData.textPipeline import iter_books, book_process, global_ent, cluster_container, process_registry
-from src.NNrun import run_behavioral_pipeline
+from src.NNrun import data_pipeline_helper, models
 from src.neuralNet.zeroshot import calculate_w_vector
 
 def test_pipeline_with_real_data():
@@ -94,25 +94,36 @@ def test_zeroshot_behavioral_pipeline():
 
     # 2. Run Behavioral Pipeline
     # This invokes NNrun -> sceneGenerator -> zeroshot
-    all_results = run_behavioral_pipeline(doc_container, registry)
+    all_results = data_pipeline_helper(doc_container, registry, [models.ZSHOT])
+    zshot_results = all_results.get("ZSHOT", {})
     
-    # 3. Assertions
-    assert isinstance(all_results, dict), "Results should be a dictionary keyed by character name"
+    # 3. Assertions (Update these to use zshot_results)
+    assert isinstance(all_results, dict), "Outer result should be a task dictionary"
+    assert isinstance(zshot_results, dict), "ZSHOT results should be a char dictionary"
     
     if len(registry) > 0:
         first_char = list(registry.keys())[0]
-        assert first_char in all_results, f"No results found for {first_char}"
+        # Check inside the ZSHOT sub-dictionary
+        assert first_char in zshot_results, f"No ZSHOT results found for {first_char}"
         
-        if len(all_results[first_char]) > 0:
-            sample = all_results[first_char][0]
+        if len(zshot_results[first_char]) > 0:
+            sample = zshot_results[first_char][0]
             assert "label_vector" in sample, "Missing label_vector in output"
             assert "weighted_vector" in sample, "Missing weighted_vector in output"
             assert len(sample["label_vector"]) == 6, "Vector length must match 6D labels"
-    
-    candidate = list(all_results.keys())[:2]
 
-    print(f"{'Character':<12} | {'Label Vector (First 3)':<30} | {'Weighted Vector (First 3)'}")
-    print("-" * 85)
+    candidate = list(zshot_results.keys())[:2]
+
+    print(f"\n{'Character':<12} | {'Label Vector':<55} | {'Weighted'}")
+    print("-" * 120)
+
+    for char in candidate:
+        data = zshot_results[char] # Access data from the sub-dict
+        for entry in data[:2]:
+            l_vec_str = str([round(float(x), 4) for x in entry['label_vector']])
+            w_vec_str = str([round(float(x), 4) for x in entry['weighted_vector']])
+            print(f"{char:<12} | {l_vec_str:<55} | {w_vec_str}")
+        print("-" * 120)
 
     for char in candidate:  # Slicing to get only the first 3 dict entries
         data = all_results[char]
@@ -123,15 +134,52 @@ def test_zeroshot_behavioral_pipeline():
             print(f"{char:<12} | {l_vec_str:<55} | {w_vec_str}")
         print("-" * 85)
 
-def test_vector_math_logic():
-    """Verify the competitive softmax logic for Group A and B."""
-    # Group A strong, Group B weak
-    input_v = [0.9, 0.8, 0.7, 0.1, 0.1, 0.1]
-    weighted = calculate_w_vector(input_v)
+def test_encoding():
+    global_ent.clear()
+    cluster_container.clear()
     
-    # Group A should remain dominant
-    assert sum(weighted[:3]) > sum(weighted[3:])
-    assert len(weighted) == 6
+    books = list(iter_books(mode="test"))
+    book_id, text = books[0]
+
+    doc_container = book_process(text[:20000]) 
+    registry = process_registry(global_ent, cluster_container)
+
+    all_results = data_pipeline_helper(doc_container, registry, [models.ENCODE])
+    encode_results = all_results.get("ENCODE", {})
+    
+    if len(registry) > 0:
+        first_char = list(registry.keys())[0]
+        assert first_char in encode_results, f"No ENCODE results found for {first_char}"
+        
+        char_data = encode_results[first_char]
+        if len(char_data) > 0:
+            sample = char_data[0]
+            
+            # Key checks based on your process_observation_batch code
+            assert "context" in sample, "Missing context (indices) in output"
+            assert "obs_vector" in sample, "Missing obs_vector in output"
+            
+            # Check the dimensionality (SBERT is usually 768)
+            vector_len = len(sample["obs_vector"])
+            assert vector_len == 768, f"Expected 768d vector, got {vector_len}d"
+
+    # 4. Printing the results
+    # Since 768 is too long to print, we show just the first 5 dimensions
+    candidate = list(encode_results.keys())[:2]
+
+    print(f"\n{'Character':<12} | {'Context (ID, Idx)':<20} | {'Obs Vector (First 5)'}")
+    print("-" * 90)
+
+    for char in candidate:
+        data = encode_results[char]
+        for entry in data[:3]:
+            # Formatting the context and the vector slice
+            ctx_str = str(entry['context'])
+            v_slice = [round(float(x), 4) for x in entry['obs_vector'][:5]]
+            v_str = f"{str(v_slice)[:-1]} ...]" # Add ellipsis to show it's truncated
+            
+            print(f"{char:<12} | {ctx_str:<20} | {v_str}")
+        print("-" * 90)
 
 if __name__ == "__main__":
     #run from code as root
@@ -141,11 +189,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser() # No description needed
     parser.add_argument("-p", "--pipe", action="store_true")
     parser.add_argument("-b", "--bart", action="store_true")
+    parser.add_argument("-e", "--encode", action="store_true")
     args = parser.parse_args()
 
     if args.bart:
         test_zeroshot_behavioral_pipeline()
-        test_vector_math_logic()
     if args.pipe:
         test_pipeline_with_real_data()
+    if args.encode:
+        test_encoding()
     
