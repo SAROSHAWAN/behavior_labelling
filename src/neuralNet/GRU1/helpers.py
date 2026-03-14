@@ -14,7 +14,7 @@ def prepare_and_save_chunks(all_res, bart_data_dict, sbert_data_dict, filename="
     all_lbls = []
 
     for char_name in sbert_data_dict.keys():
-        encode_list = sbert_data_dict[char_name]
+        encode_list = [item['obs_vector'] for item in sbert_data_dict[char_name]]
         lbl_list = [item['weighted_vector'] for item in bart_data_dict[char_name]] #just pick the item we want from bart_dict
         
         N = len(encode_list)
