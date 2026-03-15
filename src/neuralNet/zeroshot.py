@@ -7,7 +7,6 @@ from transformers import pipeline
 from transformers.pipelines.pt_utils import KeyDataset
 from datasets import Dataset
 
-from src.processData.sceneGenerator import scene_batch_gen
 #from src.fileIO import load_doc_container, load_registry
 from src.config import WINDOW_SIZE, BATCH_SIZE, LABELS
 

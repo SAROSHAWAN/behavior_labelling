@@ -1,4 +1,3 @@
-import torch
 from sentence_transformers import SentenceTransformer
 from src.config import BATCH_SIZE
 

@@ -48,16 +48,17 @@ def train_model():
     for epoch in range(EPOCHS):
         total_loss = 0.0
         
-        for batch_idx, (batch_x, batch_y) in enumerate(dataloader):
+        for batch_idx, (batch_x, batch_y, delta) in enumerate(dataloader):
             # Move data to the GPU
             batch_x = batch_x.to(device)
             batch_y = batch_y.to(device)
+            delta = delta.to(device)
 
             # Zero the gradients
             optimizer.zero_grad()
 
             # Forward pass
-            predictions = model(batch_x)
+            predictions = model(batch_x, delta)
 
             # Compute loss
             loss = criterion(predictions, batch_y)
@@ -70,7 +71,8 @@ def train_model():
 
         # Print average loss for the epoch
         avg_loss = total_loss / len(dataloader)
-        print(f"Epoch [{epoch+1}/{EPOCHS}] | Average Loss: {avg_loss:.4f}")
+        current_alpha = model.alpha.item()
+        print(f"Epoch [{epoch+1}/{EPOCHS}] | Average Loss: {avg_loss:.4f} | Alpha: {current_alpha:.4f}")
 
     # 7. Save the trained model
     save_path = "gru1_learned_labeler.pth"
