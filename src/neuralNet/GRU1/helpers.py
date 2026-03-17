@@ -11,13 +11,15 @@ def prepare_and_save_chunks(all_res, filename="distill_data.pt", chunk_size=100)
     bart: { 'Name': [{'label_vector': [...], ...}, ...], ... }
     sbert: { 'Name': [ [768_dims], [768_dims], ... ], ... }
     """
-
     total_chunks = 0
-    for char_name in all_res:
-        n = len(all_res[char_name])
+    encode_dict = all_res.get("ENCODE", {})
+    
+    for char_name, items in encode_dict.items():
+        n = len(items)
         if n >= chunk_size:
             # math.ceil ensures we get the final partial chunk too
             total_chunks += math.ceil(n / chunk_size)
+            
     all_encode = torch.empty((total_chunks, chunk_size, 768))
     all_lbls = torch.empty((total_chunks, chunk_size, 6))
 
@@ -51,3 +53,15 @@ def load_distill_data(filename="distill_data.pt"):
     load_path = BASE_DIR / filename
     data = torch.load(load_path, weights_only=True)
     return data['encodings'], data['labels']
+
+def save_zshot_cache(zshot_dict, filename="zshot_cache.pt"):
+    """Saves the heavy BART zero-shot dictionary to disk."""
+    save_path = BASE_DIR / filename
+    torch.save(zshot_dict, save_path)
+    print(f"SUCCESS: Saved ZSHOT cache to: {save_path}")
+
+def load_zshot_cache(filename="zshot_cache.pt"):
+    """Loads the cached BART zero-shot dictionary."""
+    load_path = BASE_DIR / filename
+    # weights only is false because we are loading a complex Python dictionary, not just model weights
+    return torch.load(load_path, weights_only=False)

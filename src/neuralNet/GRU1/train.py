@@ -4,29 +4,25 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 
-# Import your custom modules
-# Adjust these import paths if your folder structure is slightly different
+
 from helpers import load_distill_data
 from bartDistil import WindowGRU
 
 def train_model():
-    # 1. Setup Device (Utilize that RTX 3060 we just fixed!)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"--- Training on device: {device} ---")
 
-    # 2. Hyperparameters
     BATCH_SIZE = 8
     LEARNING_RATE = 1e-3
     EPOCHS = 20 #read through entire dataset exactly 20 times.
 
-    # 3. Load Data
     print("Loading distilled data...")
     try:
-        encodings, labels = load_distill_data("distill_data.pt")
+        encodings, labels = load_distill_data("distill_data_val.pt")
         print(f"Encodings shape: {encodings.shape}") # Expected: [N, 100, 768]
         print(f"Labels shape: {labels.shape}")       # Expected: [N, 100, 6]
     except FileNotFoundError:
-        print("Error: 'distill_data.pt' not found. Run your helper.py extraction first!")
+        print("Error: 'distill_data_val.pt' not found. Run your helper.py extraction first!")
         return
 
     # 4. Create DataLoader

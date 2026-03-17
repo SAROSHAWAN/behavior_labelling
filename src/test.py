@@ -2,7 +2,6 @@
 import random
 import sys
 import os
-import numpy as np
 import pytest
 from src.processData.textPipeline import iter_books, book_process, global_ent, cluster_container, process_registry
 from src.NNrun import data_pipeline_helper, models
@@ -162,7 +161,8 @@ def test_encoding():
             assert "obs_vector" in sample, "Missing obs_vector in output"
             
             # Check the dimensionality (SBERT is usually 768)
-            assert sample["obs_vector"].shape == (768,), f"Expected 768d, got {sample['obs_vector'].shape}"
+            vector_len = len(sample["obs_vector"])
+            assert vector_len == 768, f"Expected 768d vector, got {vector_len}d"
 
     # 4. Printing the results
     # Since 768 is too long to print, we show just the first 5 dimensions
@@ -176,39 +176,115 @@ def test_encoding():
         for entry in data[:3]:
             # Formatting the context and the vector slice
             ctx_str = str(entry['context'])
-            v_slice = entry['obs_vector'][:5].detach().cpu().numpy()
-            v_str = np.array2string(v_slice, precision=4, separator=', ')
-            v_str = f"{v_str[:-1]} ...]" # Add ellipsis
+            v_slice = [round(float(x), 4) for x in entry['obs_vector'][:5]]
+            v_str = f"{str(v_slice)[:-1]} ...]" # Add ellipsis to show it's truncated
             
             print(f"{char:<12} | {ctx_str:<20} | {v_str}")
         print("-" * 90)
         
+def cache_zeroshot_pipeline():
+    """
+    OVERNIGHT RUN: Runs ONLY the heavy BART pipeline across multiple books and caches the results.
+    """
+    print("\n--- Starting Heavy ZSHOT Caching (Validation Set) ---")
+    
+    # 1. Swap to your validation folder
+    books = list(iter_books(mode="validation"))
+    
+    # 2. Grab just the first 3 books
+    books_to_process = books[:3]
+    print(f"Found {len(books)} validation books. Processing the first 3...")
+    
+    # 3. Master dictionary to hold everyone's data
+    master_zshot_data = {}
+    
+    for i, (book_id, text) in enumerate(books_to_process):
+        print(f"\n[{i+1}/3] Processing book: {book_id}")
+        
+        # CRITICAL: Clear global containers inside the loop so books don't bleed into each other!
+        global_ent.clear()
+        cluster_container.clear()
+        
+        doc_container = book_process(text) 
+        registry = process_registry(global_ent, cluster_container)
+
+        print(f"Running heavy BART zero-shot pipeline for {book_id}...")
+        all_results = data_pipeline_helper(doc_container, registry, [models.ZSHOT])
+        book_zshot_data = all_results.get("ZSHOT", {})
+        
+        # 4. Safely merge this book's characters into the master dictionary
+        for char_name, data_list in book_zshot_data.items():
+            # Create a unique ID like "Book1_John" to prevent cross-book contamination
+            unique_char_name = f"{book_id}_{char_name}"
+            
+            if unique_char_name not in master_zshot_data:
+                master_zshot_data[unique_char_name] = []
+                
+            master_zshot_data[unique_char_name].extend(data_list)
+            
+    # 5. Save the massive combined dictionary!
+    print("\n--- All books processed! Saving Cache ---")
+    from src.neuralNet.GRU1.helpers import save_zshot_cache
+    save_zshot_cache(master_zshot_data, "zshot_cache_val_3books.pt")
+
+
 def generate_distill_dataset():
     """
-    Run BOTH the encoding and zeroshot pipelines, then save the chunked data for the GRU.
+    FAST RUN: Loads the cached BART data, runs SBERT across the same 3 books, and stitches them together.
     """
-    print("\n--- Starting Data Extraction for GRU ---")
-    global_ent.clear()
-    cluster_container.clear()
+    print("\n--- Starting Data Extraction for GRU (Validation Set) ---")
     
-    books = list(iter_books(mode="test"))
-    book_id, text = books[0]
+    from src.neuralNet.GRU1.helpers import load_zshot_cache, prepare_and_save_chunks
     
-    # Note: Using text[:20000] for a fast test. Remove slice for the full book.
-    doc_container = book_process(text[:20000]) 
-    registry = process_registry(global_ent, cluster_container)
+    # 1. Load the heavy BART data instantly
+    try:
+        print("Loading cached ZSHOT data...")
+        bart_data_dict = load_zshot_cache("zshot_cache_val_3books.pt")
+    except FileNotFoundError:
+        print("Error: Cache not found! Run with -cz first to generate the ZSHOT cache.")
+        return
 
-    print("Running SBERT and BART pipelines...")
-    all_results = data_pipeline_helper(doc_container, registry, [models.ENCODE, models.ZSHOT])
+    # 2. Grab the EXACT same 3 validation books
+    books = list(iter_books(mode="validation"))
+    books_to_process = books[:3]
     
-    bart_data_dict = all_results.get("ZSHOT", {})
-    sbert_data_dict = all_results.get("ENCODE", {})
+    master_encode_data = {}
+
+    # 3. Process the books for SBERT
+    for i, (book_id, text) in enumerate(books_to_process):
+        print(f"\n[{i+1}/3] Processing book for SBERT: {book_id}")
+        
+        # CRITICAL: Clear containers for each book to prevent bleed
+        global_ent.clear()
+        cluster_container.clear()
+        
+        doc_container = book_process(text) 
+        registry = process_registry(global_ent, cluster_container)
+
+        print(f"Running fast SBERT encoding pipeline for {book_id}...")
+        book_results = data_pipeline_helper(doc_container, registry, [models.ENCODE])
+        book_encode_data = book_results.get("ENCODE", {})
+        
+        # 4. Format keys to match the BART cache (BookID_CharName)
+        for char_name, data_list in book_encode_data.items():
+            unique_char_name = f"{book_id}_{char_name}"
+            
+            if unique_char_name not in master_encode_data:
+                master_encode_data[unique_char_name] = []
+                
+            master_encode_data[unique_char_name].extend(data_list)
+
+    # 5. Stitch them together
+    print("\n--- All books encoded! Distilling chunks... ---")
     
+    # Create the combined dictionary that prepare_and_save_chunks expects
+    all_results = {
+        "ZSHOT": bart_data_dict,
+        "ENCODE": master_encode_data
+    }
     
-    from src.neuralNet.GRU1.helpers import prepare_and_save_chunks
-    
-    print("Pipeline complete. Distilling chunks...")
-    prepare_and_save_chunks(all_results)
+    # Pass it to your helper and save it as a validation-specific chunk file
+    prepare_and_save_chunks(all_results, filename="distill_data_val.pt")
     
 if __name__ == "__main__":
     #run from code as root
@@ -220,6 +296,7 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--bart", action="store_true")
     parser.add_argument("-e", "--encode", action="store_true")
     parser.add_argument("-d", "--distill", action="store_true")
+    parser.add_argument("-cz", "--cache_zshot", action="store_true")
     args = parser.parse_args()
 
     if args.bart:
@@ -230,4 +307,5 @@ if __name__ == "__main__":
         test_encoding()
     if args.distill:
         generate_distill_dataset()
-    
+    if args.cache_zshot:
+        cache_zeroshot_pipeline()
